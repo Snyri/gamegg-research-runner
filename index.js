@@ -1,71 +1,67 @@
-const REQUIRED = ["BOT_ID"];
+const { AutoClient } = require('top.gg-voter');
 
-for (const name of REQUIRED) {
-  if (!process.env[name]) {
-    console.error(`[BOOT] Missing required environment variable: ${name}`);
-    process.exit(1);
-  }
+// Verifica la presenza delle credenziali fondamentali erogate da Northflank
+if (!process.env.DISCORD_TOKENS || !process.env.BOT_ID) {
+  console.error("[ERRORE] Variabili d'ambiente DISCORD_TOKENS o BOT_ID mancanti!");
+  process.exit(1);
 }
 
+// Estrae i dati convertendoli nei formati corretti
+const tokenList = process.env.DISCORD_TOKENS.split(',').map(t => t.trim());
 const botId = process.env.BOT_ID;
-const tokenList = (process.env.HARMONY_TOKENS || "demo-token-1,demo-token-2")
-  .split(",")
-  .map((v) => v.trim())
-  .filter(Boolean);
+const proxies = process.env.PROXIES ? process.env.PROXIES.split(',').map(p => p.trim()) : undefined;
+const runInParallel = process.env.RUN_IN_PARALLEL === 'true';
 
-const proxies = (process.env.PROXIES || "")
-  .split(",")
-  .map((v) => v.trim())
-  .filter(Boolean);
+console.log(`[${new Date().toISOString()}] --- Avvio Sessione di Voto ---`);
+console.log(`[INFO] Bot target ID: ${botId}`);
+console.log(`[INFO] Numero di token caricati: ${tokenList.length}`);
+console.log(`[INFO] Esecuzione parallela: ${runInParallel}`);
 
-const runInParallel = process.env.RUN_IN_PARALLEL === "true";
-const delayMs = Number(process.env.SIMULATED_DELAY_MS || 750);
-
-const stats = {
-  total: tokenList.length,
-  success: 0,
-  failed: 0,
-  invalid: 0
-};
-
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-async function simulateOne(token, index) {
-  const masked = token.length <= 6
-    ? "***"
-    : `${token.slice(0, 3)}...${token.slice(-3)}`;
-
-  const proxy = proxies.length ? proxies[index % proxies.length] : "direct";
-
-  console.log(
-    `[${new Date().toISOString()}] [SIM] bot=${botId} token=${masked} proxy=${proxy}`
-  );
-
-  await sleep(delayMs);
-
-  // Safe simulation only: no external voting, login, captcha or anti-bot bypass.
-  stats.success += 1;
-}
-
-async function main() {
-  console.log(`[${new Date().toISOString()}] Starting one-shot research run.`);
-  console.log(`[CONFIG] tokens=${stats.total} parallel=${runInParallel}`);
-
-  if (runInParallel) {
-    await Promise.all(tokenList.map(simulateOne));
-  } else {
-    for (let i = 0; i < tokenList.length; i++) {
-      await simulateOne(tokenList[i], i);
-    }
+// Inizializza il client di voto
+const client = new AutoClient({
+  tokenList: tokenList,
+  botId: botId,
+  cooldown: 1000, // Valore fittizio basso perché il ciclo temporale è gestito da Northflank
+  runInParallel: runInParallel,
+  proxies: proxies,
+  verbose: true,
+  errorLog: (error) => {
+    console.error(`[ERRORE DURANTE IL VOTO]: ${error.message}`);
   }
+});
 
-  console.log(`[${new Date().toISOString()}] Run complete.`);
-  console.log(JSON.stringify(stats, null, 2));
+// Funzione di gestione del ciclo di vita del container su Northflank
+async function runSession() {
+  try {
+    // Avvia la procedura di voto automatica della libreria
+    client.autovoteBot();
+
+    // Controlliamo periodicamente lo stato delle statistiche per capire quando spegnere il container
+    const monitorInterval = setInterval(() => {
+      if (client.stats) {
+        const processati = client.stats.success + client.stats.failed + client.stats.invalid;
+        const totali = client.stats.total;
+
+        if (processati >= totali && totali > 0) {
+          console.log(`\n[${new Date().toISOString()}] --- Sessione Completata ---`);
+          console.log(`[STATISTICHE] Totali: ${client.stats.total} | Successi: ${client.stats.success} | Falliti: ${client.stats.failed} | Invalidi: ${client.stats.invalid}`);
+          
+          clearInterval(monitorInterval);
+          process.exit(0); // Chiude il container con successo su Northflank
+        }
+      }
+    }, 5000);
+
+    // Timeout globale (5 minuti): impedisce al container di rimanere appeso all'infinito consumando crediti
+    setTimeout(() => {
+      console.log(`[TIMEOUT] Raggiunto limite massimo di 5 minuti. Forzo lo spegnimento.`);
+      process.exit(0);
+    }, 5 * 60 * 1000);
+
+  } catch (err) {
+    console.error("[CRITICO] Errore generale nell'applicazione:", err);
+    process.exit(1); // Chiude il container segnalando un fallimento del processo
+  }
 }
 
-main()
-  .then(() => process.exit(0))
-  .catch((err) => {
-    console.error("[FATAL]", err);
-    process.exit(1);
-  });
+runSession();
