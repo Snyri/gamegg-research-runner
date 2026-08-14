@@ -1,13 +1,14 @@
 {
   "name": "gamegg-research-runner",
   "version": "1.0.0",
-  "description": "Automatizzazione voto per Top.gg ottimizzato per Northflank Cron Job",
-  "main": "index.js",
+  "description": "GameGG Research Runner configured for deployment on Northflank",
+  "main": "server.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node server.js",
+    "runner": "node index.js"
   },
   "dependencies": {
-    "top.gg-voter": "^1.0.0"
+    "dotenv": "^16.4.5"
   },
   "engines": {
     "node": ">=18.0.0"
