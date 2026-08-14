@@ -1,52 +1,48 @@
-const { AutoClient } = require('top.gg-voter');
+// Assicurati che le variabili d'ambiente siano caricate
+require('dotenv').config();
 
-if (!process.env.DISCORD_TOKENS || !process.env.BOT_ID) {
-  console.error("[ERRORE] Variabili d'ambiente DISCORD_TOKENS o BOT_ID mancanti!");
-  process.exit(1);
-}
+async function runRunner() {
+  console.log('[Runner] Avvio del processo di ricerca/voto...');
 
-const tokenList = process.env.DISCORD_TOKENS.split(',').map(t => t.trim());
-const botId = process.env.BOT_ID;
-const proxies = process.env.PROXIES ? process.env.PROXIES.split(',').map(p => p.trim()) : undefined;
-const runInParallel = process.env.RUN_IN_PARALLEL === 'true';
-
-console.log(`[${new Date().toISOString()}] Avvio sessione programmata.`);
-
-const client = new AutoClient({
-  tokenList: tokenList,
-  botId: botId,
-  cooldown: 1000, 
-  runInParallel: runInParallel,
-  proxies: proxies,
-  verbose: true,
-  errorLog: (error) => { console.error(`[ERRORE VOTO]: ${error.message}`); }
-});
-
-async function runSession() {
   try {
-    client.autovoteBot();
+    // 1. Inizializzazione del tuo client/bot
+    // const client = new YourClientClass(...);
 
-    const monitorInterval = setInterval(() => {
-      if (client.stats) {
-        const processati = client.stats.success + client.stats.failed + client.stats.invalid;
-        if (processati >= client.stats.total && client.stats.total > 0) {
-          console.log(`[FINISH] Successi: ${client.stats.success} | Falliti: ${client.stats.failed}`);
-          clearInterval(monitorInterval);
-          process.exit(0); 
+    // 2. Chiamata ASINCRONA CORRETTA con await
+    if (typeof client !== 'undefined' && client.autovoteBot) {
+      console.log('[Runner] Esecuzione autovoteBot()...');
+      await client.autovoteBot(); 
+    }
+
+    // 3. Monitoraggio dello stato con Gestione Errori e Timeout Reale
+    const TIMEOUT_MS = 10 * 60 * 1000; // 10 Minuti
+    const CHECK_INTERVAL_MS = 5000;     // 5 Secondi
+    const startTime = Date.now();
+
+    await new Promise((resolve, reject) => {
+      const interval = setInterval(() => {
+        const elapsedTime = Date.now() - startTime;
+
+        // Se il client ha terminato con successo
+        if (typeof client !== 'undefined' && client.stats && client.stats.completed) {
+          clearInterval(interval);
+          return resolve();
         }
-      }
-    }, 5000);
 
-    // Timeout di sicurezza di 10 minuti per evitare container appesi se Puppeteer si blocca
-    setTimeout(() => {
-      console.log(`[TIMEOUT] Sessione terminata per tempo limite.`);
-      process.exit(0);
-    }, 10 * 60 * 1000);
+        // FAILED TIMEOUT: Se va in timeout, DEVE lanciare un errore (exit code 1)
+        if (elapsedTime >= TIMEOUT_MS) {
+          clearInterval(interval);
+          return reject(new Error('TIMEOUT: La sessione del runner ha superato i 10 minuti senza completarsi.'));
+        }
+      }, CHECK_INTERVAL_MS);
+    });
 
-  } catch (err) {
-    console.error("[CRITICO]", err);
-    process.exit(1);
+    console.log('[Runner] Processo completato con successo!');
+  } catch (error) {
+    console.error('[Runner ERRORE]:', error.message);
+    // CRUCIALE: Esci con codice 1 per notificare a Northflank che il job è FALLITO
+    process.exit(1); 
   }
 }
 
-runSession();
+runRunner();
