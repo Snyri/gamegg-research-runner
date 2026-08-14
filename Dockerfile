@@ -1,62 +1,22 @@
-# Usa l'immagine ufficiale Node.js slim
 FROM node:20-slim
 
-# Installa le dipendenze di sistema necessarie per Chrome / Puppeteer / Playwright
+# Installa dipendenze di sistema necessarie
 RUN apt-get update && apt-get install -y \
-    wget \
-    gnupg \
-    ca-certificates \
     procps \
-    libsqlite3-dev \
-    fonts-liberation \
-    libasound2 \
-    libatk-bridge2.0-0 \
-    libatk1.0-0 \
-    libc6 \
-    libcairo2 \
-    libcups2 \
-    libdbus-1-3 \
-    libexpat1 \
-    libfontconfig1 \
-    libgbm1 \
-    libgcc1 \
-    libglib2.0-0 \
-    libgtk-3-0 \
-    libnspr4 \
-    libnss3 \
-    libpango-1.0-0 \
-    libpangocairo-1.0-0 \
-    libstdc++6 \
-    libx11-6 \
-    libx11-xcb1 \
-    libxcb1 \
-    libxcomposite1 \
-    libxcursor1 \
-    libxdamage1 \
-    libxext6 \
-    libxfixes3 \
-    libxi6 \
-    libxrandr2 \
-    libxrender1 \
-    libxss1 \
-    libxtst6 \
-    lsb-release \
-    xdg-utils \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Copia i file di configurazione dei pacchetti
+# Copia i file delle dipendenze
 COPY package*.json ./
 
-# Installa tutte le dipendenze
-RUN npm ci --only=production
+# Usa npm install se package-lock.json manca, altrimenti npm ci
+RUN if [ -f package-lock.json ]; then npm ci --only=production; else npm install --only=production; fi
 
-# Copia il resto dei file dell'applicazione
+# Copia il codice sorgente
 COPY . .
 
-# Espone la porta usata da Northflank
 EXPOSE 3000
 
-# Avvia l'applicazione
 CMD ["node", "server.js"]
