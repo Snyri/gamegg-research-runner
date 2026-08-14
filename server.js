@@ -2,12 +2,19 @@ const http = require('http');
 const { spawn } = require('child_process');
 
 const PORT = process.env.PORT || 3000;
+let isRunnerHealthy = true;
+let runnerErrorMessage = '';
 
-// Server HTTP per soddisfare l'health check di Northflank
+// Server HTTP per l'Health Check di Northflank
 const server = http.createServer((req, res) => {
   if (req.url === '/health' || req.url === '/') {
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ status: 'ok', message: 'Runner is active' }));
+    if (isRunnerHealthy) {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ status: 'ok', message: 'Runner active' }));
+    } else {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ status: 'error', message: runnerErrorMessage }));
+    }
   } else {
     res.writeHead(404);
     res.end();
@@ -15,25 +22,25 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`[Northflank Server] Health check listening on port ${PORT}`);
-  startRunner();
+  console.log(`[Northflank] Healthcheck server attivo sulla porta ${PORT}`);
+  startRunnerProcess();
 });
 
-// Funzione per avviare il runner principale
-function startRunner() {
-  console.log('[Northflank Server] Starting Research Runner process...');
+function startRunnerProcess() {
+  console.log('[Northflank] Avvio del child process index.js...');
   
-  // Esegue l'index.js (o lo script principale del runner)
   const runner = spawn('node', ['index.js'], {
     stdio: 'inherit',
     env: process.env
   });
 
   runner.on('close', (code) => {
-    console.log(`[Northflank Server] Runner process exited with code ${code}`);
-  });
-
-  runner.on('error', (err) => {
-    console.error('[Northflank Server] Failed to start runner:', err);
+    if (code !== 0) {
+      console.error(`[Northflank] Il runner è fallito con codice di uscita: ${code}`);
+      isRunnerHealthy = false;
+      runnerErrorMessage = `Runner process failed with exit code ${code}`;
+    } else {
+      console.log('[Northflank] Il runner ha terminato con successo.');
+    }
   });
 }
