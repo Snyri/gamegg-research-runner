@@ -1,14 +1,15 @@
 {
   "name": "gamegg-research-runner",
   "version": "1.0.0",
-  "private": true,
-  "description": "Research-safe one-shot Node.js cron runner for anti-bot/editorial demonstrations.",
+  "description": "Automatizzazione voto per Top.gg ottimizzato per Northflank Cron Job",
   "main": "index.js",
-  "type": "commonjs",
   "scripts": {
     "start": "node index.js"
   },
+  "dependencies": {
+    "top.gg-voter": "^1.0.0"
+  },
   "engines": {
-    "node": ">=20"
+    "node": ">=18.0.0"
   }
 }
