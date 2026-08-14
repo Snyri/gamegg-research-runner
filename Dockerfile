@@ -1,10 +1,31 @@
-FROM node:20-alpine
+FROM node:20-slim
 
-WORKDIR /app
+# Installa i pacchetti di sistema richiesti da Puppeteer/Chrome per aprirsi in modalità headless
+RUN apt-get update && apt-get install -y \
+    wget \
+    gnupg \
+    ca-certificates \
+    procps \
+    libxss1 \
+    libasound2 \
+    libatk-bridge2.0-0 \
+    libgtk-3-0 \
+    libgbm1 \
+    libnss3 \
+    --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/*
 
-COPY package.json ./
-RUN npm install --omit=dev
+# Imposta la directory di lavoro all'interno del container
+WORKDIR /usr/src/app
 
-COPY index.js ./
+# Copia i file delle dipendenze
+COPY package*.json ./
 
-CMD ["npm", "start"]
+# Installa in modo pulito le dipendenze di Node
+RUN npm ci
+
+# Copia tutto il resto del codice sorgente
+COPY . .
+
+# Avvia l'applicazione
+CMD [ "npm", "start" ]
